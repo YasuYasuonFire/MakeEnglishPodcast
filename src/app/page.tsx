@@ -30,12 +30,15 @@ export default function Home() {
         setStatus('音声ファイルをアップロード中...');
         
         const formData = new FormData();
-        formData.append('audio', acceptedFiles[0]);
-        
+        const file = acceptedFiles[0];
+        formData.append('audio', file);
+
         const response = await axios.post('/api/convert', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
           onUploadProgress: (progressEvent) => {
             const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total!);
             setStatus(`アップロード中... ${progress}%`);

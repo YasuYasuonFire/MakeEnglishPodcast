@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { IncomingForm, Fields, Files } from 'formidable';
 import { promises as fs } from 'fs';
 import { IncomingMessage } from 'http';
+import { Readable } from 'stream';
 
 // OpenAI APIクライアントの初期化
 const openai = new OpenAI({
@@ -12,6 +13,7 @@ const openai = new OpenAI({
 export const config = {
   api: {
     bodyParser: false,
+    responseLimit: false
   },
 };
 
@@ -29,10 +31,21 @@ interface FormResult {
   };
 }
 
+const streamToBuffer = async (stream: Readable): Promise<Buffer> => {
+  const chunks: Buffer[] = [];
+  return new Promise((resolve, reject) => {
+    stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+    stream.on('error', (err) => reject(err));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+  });
+};
+
 const parseForm = async (req: NextRequest): Promise<FormResult> => {
   return new Promise((resolve, reject) => {
     const form = new IncomingForm({
       maxFileSize: 100 * 1024 * 1024, // 100MB
+      keepExtensions: true,
+      multiples: false,
     });
 
     form.parse(req as unknown as IncomingMessage, (err, fields, files) => {
@@ -77,17 +90,17 @@ export async function POST(request: NextRequest) {
       console.log('音声バッファーサイズ:', audioBuffer.length);
 
       // 1. 音声をテキストに変換（ASR）
-      const sttFormData = new FormData();
+      const formData = new FormData();
       const audioBlob = new Blob([audioBuffer], { type: audioFile.mimetype });
-      sttFormData.append('file', audioBlob, audioFile.originalFilename);
-      sttFormData.append('model_id', 'scribe_v1');
+      formData.append('file', audioBlob, audioFile.originalFilename);
+      formData.append('model_id', 'scribe_v1');
 
       const transcriptionResponse = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
         method: 'POST',
         headers: {
           'xi-api-key': process.env.ELEVENLABS_API_KEY!,
         },
-        body: sttFormData
+        body: formData
       });
 
       if (!transcriptionResponse.ok) {
