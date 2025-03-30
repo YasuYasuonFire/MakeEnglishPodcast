@@ -4,6 +4,8 @@ import { IncomingForm, Fields, Files } from 'formidable';
 import { promises as fs } from 'fs';
 import { IncomingMessage } from 'http';
 import { Readable } from 'stream';
+import os from 'os';
+import path from 'path';
 
 // OpenAI APIクライアントの初期化
 const openai = new OpenAI({
@@ -42,10 +44,14 @@ const streamToBuffer = async (stream: Readable): Promise<Buffer> => {
 
 const parseForm = async (req: NextRequest): Promise<FormResult> => {
   return new Promise((resolve, reject) => {
+    const uploadDir = path.join(os.tmpdir(), 'audio-uploads');
+    fs.mkdir(uploadDir, { recursive: true }).catch(console.error);
+
     const form = new IncomingForm({
       maxFileSize: 100 * 1024 * 1024, // 100MB
       keepExtensions: true,
       multiples: false,
+      uploadDir
     });
 
     form.parse(req as unknown as IncomingMessage, (err, fields, files) => {
@@ -56,6 +62,8 @@ const parseForm = async (req: NextRequest): Promise<FormResult> => {
 };
 
 export async function POST(request: NextRequest) {
+  let audioFilePath: string | undefined;
+
   try {
     // 環境変数のチェック
     if (!process.env.OPENAI_API_KEY) {
@@ -78,10 +86,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    audioFilePath = audioFile.filepath;
+
     console.log('音声ファイル情報:', {
       name: audioFile.originalFilename,
       type: audioFile.mimetype,
-      size: audioFile.size
+      size: audioFile.size,
+      path: audioFile.filepath
     });
 
     try {
@@ -163,21 +174,21 @@ export async function POST(request: NextRequest) {
       const audioBase64 = Buffer.from(outputAudioBuffer).toString('base64');
       const audioUrl = `data:audio/mp3;base64,${audioBase64}`;
 
-      // 一時ファイルを削除
-      await fs.unlink(audioFile.filepath);
-
       return NextResponse.json({ url: audioUrl });
-    } catch (error) {
-      // エラーが発生した場合も一時ファイルを削除
-      if (audioFile?.filepath) {
-        await fs.unlink(audioFile.filepath).catch(console.error);
+    } finally {
+      // 一時ファイルを削除
+      if (audioFilePath) {
+        await fs.unlink(audioFilePath).catch(console.error);
       }
-      console.error('処理中のエラー詳細:', error);
-      throw error;
     }
   } catch (error) {
     console.error('エラー発生:', error);
     
+    // エラーが発生した場合も一時ファイルを削除
+    if (audioFilePath) {
+      await fs.unlink(audioFilePath).catch(console.error);
+    }
+
     let errorMessage = '変換処理中にエラーが発生しました';
     if (error instanceof Error) {
       errorMessage = `${errorMessage}: ${error.message}`;
