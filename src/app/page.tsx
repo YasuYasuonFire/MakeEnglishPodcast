@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, isAxiosError } from 'axios';
 
 export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -21,6 +21,7 @@ export default function Home() {
       try {
         setIsProcessing(true);
         setError(null);
+        setDownloadUrl('');
         setStatus('音声ファイルをアップロード中...');
         
         const formData = new FormData();
@@ -36,19 +37,30 @@ export default function Home() {
           },
         });
         
-        setDownloadUrl(response.data.url);
-        setStatus('変換が完了しました！');
+        if (response.data?.url) {
+          setDownloadUrl(response.data.url);
+          setStatus('変換が完了しました！');
+        } else {
+          throw new Error('APIレスポンスが不正です');
+        }
       } catch (error) {
         console.error('Error:', error);
         let errorMessage = 'エラーが発生しました。もう一度お試しください。';
         
-        if (error instanceof AxiosError && error.response?.data?.error) {
-          errorMessage = error.response.data.error;
-          console.error('API Error Details:', error.response.data.details);
+        if (isAxiosError(error)) {
+          const axiosError = error as AxiosError<{ error?: string }>;
+          if (axiosError.response?.data?.error) {
+            errorMessage = axiosError.response.data.error;
+          } else if (axiosError.message) {
+            errorMessage = `リクエストエラー: ${axiosError.message}`;
+          }
+        } else if (error instanceof Error) {
+          errorMessage = error.message;
         }
         
         setError(errorMessage);
         setStatus('');
+        setDownloadUrl('');
       } finally {
         setIsProcessing(false);
       }
