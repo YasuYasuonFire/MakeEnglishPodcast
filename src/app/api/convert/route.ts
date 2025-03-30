@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { IncomingForm } from 'formidable';
+import { IncomingForm, Fields, Files } from 'formidable';
 import { promises as fs } from 'fs';
 
 // OpenAI APIクライアントの初期化
@@ -14,15 +14,29 @@ export const config = {
   },
 };
 
-const parseForm = async (req: NextRequest) => {
+interface FormResult {
+  fields: Fields;
+  files: Files & {
+    audio?: {
+      [key: string]: {
+        filepath: string;
+        originalFilename?: string;
+        mimetype?: string;
+        size: number;
+      };
+    };
+  };
+}
+
+const parseForm = async (req: NextRequest): Promise<FormResult> => {
   return new Promise((resolve, reject) => {
     const form = new IncomingForm({
       maxFileSize: 100 * 1024 * 1024, // 100MB
     });
 
-    form.parse(req as any, (err, fields, files) => {
+    form.parse(req as unknown as NodeJS.IncomingMessage, (err, fields, files) => {
       if (err) reject(err);
-      resolve({ fields, files });
+      resolve({ fields, files } as FormResult);
     });
   });
 };
@@ -40,8 +54,8 @@ export async function POST(request: NextRequest) {
       throw new Error('ELEVENLABS_VOICE_ID is not set');
     }
 
-    const { files } = await parseForm(request) as any;
-    const audioFile = files.audio[0];
+    const { files } = await parseForm(request);
+    const audioFile = files.audio?.[0];
     
     if (!audioFile) {
       return NextResponse.json(
