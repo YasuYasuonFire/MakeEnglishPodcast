@@ -1,10 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { IncomingForm } from 'formidable';
+import { promises as fs } from 'fs';
 
 // OpenAI APIクライアントの初期化
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!
 });
+
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
+const parseForm = async (req: NextRequest) => {
+  return new Promise((resolve, reject) => {
+    const form = new IncomingForm({
+      maxFileSize: 100 * 1024 * 1024, // 100MB
+    });
+
+    form.parse(req as any, (err, fields, files) => {
+      if (err) reject(err);
+      resolve({ fields, files });
+    });
+  });
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,8 +40,8 @@ export async function POST(request: NextRequest) {
       throw new Error('ELEVENLABS_VOICE_ID is not set');
     }
 
-    const formData = await request.formData();
-    const audioFile = formData.get('audio') as File;
+    const { files } = await parseForm(request) as any;
+    const audioFile = files.audio[0];
     
     if (!audioFile) {
       return NextResponse.json(
@@ -30,18 +51,20 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('音声ファイル情報:', {
-      name: audioFile.name,
-      type: audioFile.type,
+      name: audioFile.originalFilename,
+      type: audioFile.mimetype,
       size: audioFile.size
     });
 
     try {
-      const audioBuffer = await audioFile.arrayBuffer();
-      console.log('音声バッファーサイズ:', audioBuffer.byteLength);
+      // ファイルを読み込む
+      const audioBuffer = await fs.readFile(audioFile.filepath);
+      console.log('音声バッファーサイズ:', audioBuffer.length);
 
       // 1. 音声をテキストに変換（ASR）
       const sttFormData = new FormData();
-      sttFormData.append('file', audioFile);
+      const audioBlob = new Blob([audioBuffer], { type: audioFile.mimetype });
+      sttFormData.append('file', audioBlob, audioFile.originalFilename);
       sttFormData.append('model_id', 'scribe_v1');
 
       const transcriptionResponse = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
@@ -112,8 +135,15 @@ export async function POST(request: NextRequest) {
       const audioBase64 = Buffer.from(outputAudioBuffer).toString('base64');
       const audioUrl = `data:audio/mp3;base64,${audioBase64}`;
 
+      // 一時ファイルを削除
+      await fs.unlink(audioFile.filepath);
+
       return NextResponse.json({ url: audioUrl });
     } catch (error) {
+      // エラーが発生した場合も一時ファイルを削除
+      if (audioFile?.filepath) {
+        await fs.unlink(audioFile.filepath).catch(console.error);
+      }
       console.error('処理中のエラー詳細:', error);
       throw error;
     }

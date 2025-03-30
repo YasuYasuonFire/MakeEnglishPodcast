@@ -9,9 +9,11 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@types/formidable": "^3.4.5",
     "axios": "^1.8.4",
     "deepl-node": "^1.17.3",
     "elevenlabs-node": "^2.0.3",
+    "formidable": "^3.5.2",
     "next": "15.2.4",
     "openai": "^4.90.0",
     "react": "^19.0.0",
