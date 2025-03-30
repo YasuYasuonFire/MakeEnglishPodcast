@@ -11,7 +11,7 @@ export default function Home() {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
-      'audio/*': ['.mp3', '.wav', '.flac']
+      'audio/*': ['.mp3', '.wav', '.flac', '.m4a']
     },
     maxSize: 100 * 1024 * 1024, // 100MB
     onDrop: async (acceptedFiles) => {
@@ -65,7 +65,7 @@ export default function Home() {
                 : '音声ファイルをドラッグ＆ドロップ、またはクリックして選択'}
             </p>
             <p className="text-sm text-gray-500">
-              対応形式: MP3, WAV, FLAC (最大100MB)
+              対応形式: MP3, WAV, FLAC, M4A (最大100MB)
             </p>
           </div>
 
