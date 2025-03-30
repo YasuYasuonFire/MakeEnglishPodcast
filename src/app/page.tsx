@@ -15,6 +15,11 @@ export default function Home() {
       'audio/*': ['.mp3', '.wav', '.flac', '.m4a']
     },
     maxSize: 100 * 1024 * 1024, // 100MB
+    onDropRejected: (fileRejections) => {
+      const errorMessage = fileRejections[0]?.errors[0]?.message || 'ファイルがアップロードできません';
+      setError(`エラー: ${errorMessage}`);
+      setStatus('');
+    },
     onDrop: async (acceptedFiles) => {
       if (acceptedFiles.length === 0) return;
       
@@ -49,7 +54,9 @@ export default function Home() {
         
         if (isAxiosError(error)) {
           const axiosError = error as AxiosError<{ error?: string }>;
-          if (axiosError.response?.data?.error) {
+          if (axiosError.response?.status === 413) {
+            errorMessage = 'ファイルサイズが大きすぎます（最大100MB）';
+          } else if (axiosError.response?.data?.error) {
             errorMessage = axiosError.response.data.error;
           } else if (axiosError.message) {
             errorMessage = `リクエストエラー: ${axiosError.message}`;
