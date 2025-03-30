@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { IncomingForm, Fields, Files } from 'formidable';
 import { promises as fs } from 'fs';
+import { IncomingMessage } from 'http';
 
 // OpenAI APIクライアントの初期化
 const openai = new OpenAI({
@@ -34,7 +35,7 @@ const parseForm = async (req: NextRequest): Promise<FormResult> => {
       maxFileSize: 100 * 1024 * 1024, // 100MB
     });
 
-    form.parse(req as unknown as NodeJS.IncomingMessage, (err, fields, files) => {
+    form.parse(req as unknown as IncomingMessage, (err, fields, files) => {
       if (err) reject(err);
       resolve({ fields, files } as FormResult);
     });
